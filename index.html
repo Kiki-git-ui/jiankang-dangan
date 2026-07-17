@@ -201,7 +201,8 @@ document.getElementById('form').onsubmit=async function(e){
   btn.disabled=true; btn.textContent='提交中...';
   msg.className='msg';
   const f={};
-  // Validate multi-select checkbox groups (at least one required)
+
+  // Validate multi-select groups
   const multiGroups=['希望改善的方向','饮食禁忌','既往病史','口味偏好','联系渠道'];
   for(const mg of multiGroups){
     const labels=Array.from(document.querySelectorAll('.opt-group label')).filter(l => 
@@ -210,136 +211,115 @@ document.getElementById('form').onsubmit=async function(e){
     if(labels.length>0){
       const container=labels[0].closest('.opt-group');
       if(container && !container.querySelector('input:checked')){
-        alert(`请至少选择一个"${mg}"选项`);
+        alert('请至少选择一个"'+mg+'"选项');
         btn.disabled=false; btn.textContent='提交档案';
-  }
-  // Toggle other-input visibility
-  document.querySelectorAll('.other-cb').forEach(cb=>{
-    cb.addEventListener('change',function(){
-      const input=this.closest('.opt-group').querySelector('.other-input');
-      if(input) input.classList.toggle('show',this.checked);
-    });
-  });
         return;
       }
     }
   }
-this.querySelectorAll('input[type="text"],input[type="tel"],input[type="number"],input[type="date"],select,textarea').forEach(e=>{
-    if(e.name&&e.value) f[e.name]=e.value;
+
+  // Text inputs, selects, textareas
+  this.querySelectorAll('input[type="text"],input[type="tel"],input[type="number"],input[type="date"],select,textarea').forEach(function(el){
+    if(el.name&&el.value) f[el.name]=el.value;
   });
+
+  // Radio buttons
+  this.querySelectorAll('input[type="radio"]:checked').forEach(function(el){
+    if(el.name) f[el.name]=el.value;
+  });
+
+  // Checkbox groups
   const groups={};
   const otherTexts={};
-  const otherTexts={};
-  // Collect other text BEFORE it's used
-  document.querySelectorAll('.other-input.show').forEach(ele=>{
-    const group=ele.closest('.opt-group');
-    if(group&&ele.value.trim()){
-      const p=group.previousElementSibling;
-      if(p&&p.tagName==='LABEL'){
-        const name=p.textContent.trim().replace(/（可多选）/g,'').replace(/\(可多选\)/g,'').trim();
-        otherTexts[name]=ele.value.trim();
+
+  // Collect "其他" custom text
+  document.querySelectorAll('.other-input').forEach(function(el){
+    if(el.value.trim()){
+      var group=el.closest('.opt-group');
+      if(group){
+        var p=group.previousElementSibling;
+        if(p&&p.tagName==='LABEL'){
+          var name=p.textContent.trim().replace(/（可多选）/g,'').replace(/\(可多选\)/g,'').trim();
+          otherTexts[name]=el.value.trim();
+        }
       }
     }
   });
-  this.querySelectorAll('input[type="radio"]:checked').forEach(e=>{
-    if(e.name) f[e.name]=e.value;
-  });
-  this.querySelectorAll('input[type="checkbox"]:checked').forEach(e=>{
-    if(e.id==='consent') return;
-    const parent=e.closest('.opt-group');
+
+  // Collect checked checkboxes
+  this.querySelectorAll('input[type="checkbox"]:checked').forEach(function(el){
+    if(el.id==='consent') return;
+    var parent=el.closest('.opt-group');
     if(parent){
-      const label=parent.previousElementSibling;
+      var label=parent.previousElementSibling;
       if(label&&label.tagName==='LABEL'){
-        const name=label.textContent.trim().replace(/（可多选）/g,'').replace(/\(可多选\)/g,'').trim();
+        var name=label.textContent.trim().replace(/（可多选）/g,'').replace(/\(可多选\)/g,'').trim();
         if(!groups[name]) groups[name]=[];
-        groups[name].push(e.value);
+        groups[name].push(el.value);
       }
     }
   });
+
+  // Map checkbox groups to field names
   if(groups['希望改善的方向']){
     var a=groups['希望改善的方向'];
-    if(otherTexts['希望改善的方向']&&a.includes('其他')) a[a.indexOf('其他')]='其他：'+otherTexts['希望改善的方向'];
+    if(otherTexts['希望改善的方向']&&a.indexOf('其他')>=0) a[a.indexOf('其他')]='其他：'+otherTexts['希望改善的方向'];
     f['重点改善方向']=a;
   }
   if(groups['饮食禁忌']){
     var a=groups['饮食禁忌'];
-    if(otherTexts['饮食禁忌']&&a.includes('其他')) a[a.indexOf('其他')]='其他：'+otherTexts['饮食禁忌'];
+    if(otherTexts['饮食禁忌']&&a.indexOf('其他')>=0) a[a.indexOf('其他')]='其他：'+otherTexts['饮食禁忌'];
     f['饮食禁忌']=a;
   }
   if(groups['既往病史']){
     var a=groups['既往病史'];
-    if(otherTexts['既往病史']&&a.includes('其他')) a[a.indexOf('其他')]='其他：'+otherTexts['既往病史'];
+    if(otherTexts['既往病史']&&a.indexOf('其他')>=0) a[a.indexOf('其他')]='其他：'+otherTexts['既往病史'];
     f['既往健康状况']=a;
   }
   if(groups['口味偏好']) f['口味偏好']=groups['口味偏好'];
   if(groups['联系渠道']) f['联系渠道']=groups['联系渠道'];
   f['健康信息处理已同意']=document.getElementById('consent').checked;
+
+  // Convert for vika (all values must be strings)
+  for(var k in f){
+    if(typeof f[k]==='number') f[k]=String(f[k]);
+    if(f[k] instanceof Array) f[k]=f[k].join(', ');
+  }
+
+  // Submit to vika.cn
   try{
-    const xhr=new XMLHttpRequest();
-    xhr.open('POST','https://api.airtable.com/v0/'+BID+'/'+TID,true);
+    var xhr=new XMLHttpRequest();
+    xhr.open('POST','https://api.vika.cn/fusion/v1/datasheets/'+DST+'/records?fieldKey=name',true);
     xhr.setRequestHeader('Authorization','Bearer '+KEY);
     xhr.setRequestHeader('Content-Type','application/json');
     xhr.onload=function(){
-      if(xhr.status>=200&&xhr.status<300){
-        msg.className='msg ok';
-        msg.textContent='✅ 提交成功！感谢您的填写。';
-        document.getElementById('form').reset();
-        setTimeout(()=>window.scrollTo(0,0),100);
-        btn.disabled=false; btn.textContent='提交档案';
-  }
-  // Toggle other-input visibility
-  document.querySelectorAll('.other-cb').forEach(cb=>{
-    cb.addEventListener('change',function(){
-      const input=this.closest('.opt-group').querySelector('.other-input');
-      if(input) input.classList.toggle('show',this.checked);
-    });
-  });
-      }else{
+      try{
+        var resp=JSON.parse(xhr.responseText);
+        if(xhr.status>=200&&xhr.status<300&&resp.success){
+          msg.className='msg ok';
+          msg.textContent='✅ 提交成功！感谢您的填写。';
+          document.getElementById('form').reset();
+          setTimeout(function(){window.scrollTo(0,0);},100);
+        }else{
+          msg.className='msg err';
+          msg.textContent='❌ '+(resp.message||xhr.status+' '+xhr.statusText);
+        }
+      }catch(e){
         msg.className='msg err';
-        msg.textContent='❌ '+(xhr.status+' '+xhr.statusText);
-        btn.disabled=false; btn.textContent='提交档案';
-  }
-  // Toggle other-input visibility
-  document.querySelectorAll('.other-cb').forEach(cb=>{
-    cb.addEventListener('change',function(){
-      const input=this.closest('.opt-group').querySelector('.other-input');
-      if(input) input.classList.toggle('show',this.checked);
-    });
-  });
+        msg.textContent='❌ '+xhr.status+' '+xhr.statusText;
       }
+      btn.disabled=false; btn.textContent='提交档案';
     };
     xhr.onerror=function(){
       msg.className='msg err';
       msg.textContent='❌ 网络错误，请检查网络后重试';
       btn.disabled=false; btn.textContent='提交档案';
-  }
-  // Toggle other-input visibility
-  document.querySelectorAll('.other-cb').forEach(cb=>{
-    cb.addEventListener('change',function(){
-      const input=this.closest('.opt-group').querySelector('.other-input');
-      if(input) input.classList.toggle('show',this.checked);
-    });
-  });
     };
-    // Convert numbers to strings for vika
-    for(var k in f){
-      if(typeof f[k]==='number') f[k]=String(f[k]);
-      if(Array.isArray(f[k])) f[k]=f[k].map(function(v){return typeof v==='number'?String(v):v}).join(', ');
-    }
     xhr.send(JSON.stringify({records:[{fields:f}]}));
   }catch(e){
     msg.className='msg err';
     msg.textContent='❌ '+(e.message||String(e));
-    console.error(e);
     btn.disabled=false; btn.textContent='提交档案';
-  }
-  // Toggle other-input visibility
-  document.querySelectorAll('.other-cb').forEach(cb=>{
-    cb.addEventListener('change',function(){
-      const input=this.closest('.opt-group').querySelector('.other-input');
-      if(input) input.classList.toggle('show',this.checked);
-    });
-  });
   }
 };
 </script>
