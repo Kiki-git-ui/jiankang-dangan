@@ -278,7 +278,7 @@ document.getElementById('form').onsubmit=async function(e){
   }
   if(groups['口味偏好']) f['口味偏好']=groups['口味偏好'];
   if(groups['联系渠道']) f['联系渠道']=groups['联系渠道'];
-  f['健康信息处理已同意']=document.getElementById('consent').checked;
+  f['健康信息处理已同意']=document.getElementById('consent').checked?'是':'否';
 
   // Convert for vika (all values must be strings)
   for(var k in f){
